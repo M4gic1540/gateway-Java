@@ -1,0 +1,113 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[spanish]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{listings}
+\usepackage{xcolor}
+
+\geometry{margin=2.5cm}
+
+\definecolor{codebg}{HTML}{F5F5F5}
+\lstset{
+  basicstyle=\ttfamily\small,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  breaklines=true,
+  showstringspaces=false
+}
+
+\title{Gateway Java e Integracion con Microservicio de Usuarios}
+\author{ShopSmart}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Resumen}
+Este documento describe el microservicio \textbf{ShopSmart Gateway}, su configuracion, rutas, despliegue en Docker y su integracion con el microservicio de usuarios. El gateway centraliza el enrutamiento, expone endpoints comunes y aplica resiliencia con circuit breaker.
+
+\section{Arquitectura}
+El gateway se construye con \textbf{Spring Cloud Gateway} y actua como punto de entrada unico para la API. Enruta solicitudes hacia el microservicio de usuarios y expone endpoints de salud mediante Actuator.
+
+\subsection*{Componentes}
+\begin{itemize}
+  \item \textbf{Gateway}: Spring Cloud Gateway con rutas definidas en \texttt{application.yml}.
+  \item \textbf{Usuarios}: microservicio independiente en el puerto 8081.
+  \item \textbf{Resilience4j}: circuit breaker con fallback local.
+  \item \textbf{Actuator}: endpoints de salud y rutas del gateway.
+\end{itemize}
+
+\section{Dependencias principales}
+\begin{itemize}
+  \item Spring Cloud Gateway
+  \item Spring Boot Actuator
+  \item Resilience4j (circuit breaker)
+\end{itemize}
+
+\section{Configuracion}
+La configuracion principal esta en \texttt{src/main/resources/application.yml}. Valores clave:
+\begin{itemize}
+  \item Puerto: 8080
+  \item Nombre de app: \texttt{gateway-service}
+  \item CORS global habilitado
+  \item Timeouts HTTP: 5s connect, 10s response
+  \item Actuator: \texttt{/actuator/health}, \texttt{/actuator/info}, \texttt{/actuator/gateway}
+\end{itemize}
+
+\section{Rutas del Gateway}
+\begin{itemize}
+  \item \texttt{/api/v1/auth/**} \textrightarrow{} \texttt{http://usuarios-service:8081}
+  \item \texttt{/api/v1/usuarios/**} \textrightarrow{} \texttt{http://usuarios-service:8081}
+  \item \texttt{/api/v1/admin/usuarios/**} \textrightarrow{} \texttt{http://usuarios-service:8081}
+  \item \texttt{/swagger/usuarios/**} \textrightarrow{} \texttt{http://usuarios-service:8081}
+\end{itemize}
+
+\section{Resiliencia y fallback}
+Se configura un circuit breaker llamado \texttt{usuariosCircuitBreaker}. En caso de fallo, el gateway responde con el endpoint local:
+\begin{lstlisting}
+GET /fallback/usuarios
+\end{lstlisting}
+
+\section{Ejecucion local}
+Desde la carpeta del gateway:
+\begin{lstlisting}
+mvn spring-boot:run
+\end{lstlisting}
+
+\section{Docker}
+\subsection*{Dockerfile}
+El Dockerfile usa multi-stage build para generar el jar y ejecutar el gateway en JRE 17.
+
+\subsection*{docker-compose}
+El gateway se conecta a la red \texttt{shopsmart-net} y monta el \texttt{application.yml} como configuracion externa.
+
+Ejecucion:
+\begin{lstlisting}
+docker compose up -d --build
+\end{lstlisting}
+
+\section{Pruebas rapidas}
+\subsection*{Login via Gateway}
+\begin{lstlisting}
+POST http://localhost:8080/api/v1/auth/login
+Content-Type: application/json
+
+{"email":"maria.gonzalez@email.com","password":"Segura123"}
+\end{lstlisting}
+
+\subsection*{Rutas cargadas}
+\begin{lstlisting}
+GET http://localhost:8080/actuator/gateway/routes
+\end{lstlisting}
+
+\section{Troubleshooting}
+\begin{itemize}
+  \item \textbf{404 en rutas}: verificar que el gateway haya cargado las rutas en \texttt{/actuator/gateway/routes}.
+  \item \textbf{Fallback activo}: revisar conectividad con \texttt{usuarios-service} y red Docker.
+  \item \textbf{CORS}: ajustar en \texttt{application.yml} si hay bloqueos en frontend.
+  \item \textbf{Config externa}: confirmar variable \texttt{SPRING\_CONFIG\_ADDITIONAL\_LOCATION=/app/config/}.
+\end{itemize}
+
+\end{document}
